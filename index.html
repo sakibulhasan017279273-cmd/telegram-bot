@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+<title>রিওয়ার্ড ওয়ালেট</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Hind+Siliguri:wght@400;500;600;700&family=IBM+Plex+Mono:wght@500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#17130F;
+    --panel:#221B14;
+    --panel-2:#2C2318;
+    --line: rgba(251,243,231,0.10);
+    --primary:#F2994A;
+    --primary-dim: rgba(242,153,74,0.16);
+    --accent:#FFC857;
+    --paper:#FBF3E7;
+    --muted:#A8968A;
+    --danger:#E85C4A;
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{margin:0; padding:0; background:var(--ink); color:var(--paper);}
+  body{
+    font-family:'Hind Siliguri', 'Inter', sans-serif;
+    min-height:100vh;
+    padding-bottom:28px;
+    background:
+      radial-gradient(circle at 15% 0%, rgba(242,153,74,0.14), transparent 45%),
+      radial-gradient(circle at 90% 10%, rgba(255,200,87,0.10), transparent 40%),
+      var(--ink);
+  }
+  .display{ font-family:'Fraunces', serif; }
+  .mono{ font-family:'IBM Plex Mono', monospace; }
+
+  /* ---------- shared layout ---------- */
+  .screen{ max-width:480px; margin:0 auto; padding:22px 18px 0; }
+  .eyebrow{
+    font-size:12px; letter-spacing:.14em; text-transform:uppercase;
+    color:var(--primary); font-weight:600; margin-bottom:6px;
+  }
+  .h1{ font-size:26px; font-weight:600; margin:0 0 4px; line-height:1.25; }
+  .sub{ color:var(--muted); font-size:14px; line-height:1.6; margin:0; }
+
+  /* ---------- gate (join required) screen ---------- */
+  #gate{ display:none; text-align:center; padding-top:56px; }
+  .gate-badge{
+    width:64px; height:64px; margin:0 auto 20px; border-radius:20px;
+    background:var(--panel-2); border:1px solid var(--line);
+    display:flex; align-items:center; justify-content:center; font-size:28px;
+  }
+  .channel-row{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--panel); border:1px solid var(--line); border-radius:16px;
+    padding:14px 16px; margin-top:12px; text-align:left;
+  }
+  .channel-row .name{ font-weight:600; font-size:15px; }
+  .channel-row .tag{ color:var(--muted); font-size:12px; }
+  .btn{
+    display:inline-flex; align-items:center; justify-content:center; gap:8px;
+    border:none; border-radius:12px; padding:10px 16px;
+    font-family:inherit; font-weight:600; font-size:14px; cursor:pointer;
+    text-decoration:none; transition:transform .15s ease, opacity .15s ease;
+  }
+  .btn:active{ transform:scale(.96); }
+  .btn-primary{ background:var(--primary); color:#26210D; }
+  .btn-outline{ background:transparent; color:var(--paper); border:1px solid var(--line); }
+  .btn-block{ width:100%; padding:14px; font-size:15px; border-radius:14px; }
+  .btn-accent{ background:var(--accent); color:#2B2007; }
+
+  /* ---------- main app ---------- */
+  #app{ display:none; }
+  .top{ display:flex; align-items:center; justify-content:space-between; margin-bottom:18px; }
+  .greet .name{ font-size:19px; font-weight:600; }
+  .greet .tag{ color:var(--muted); font-size:13px; }
+  .avatar{
+    width:42px; height:42px; border-radius:50%; background:var(--primary-dim);
+    color:var(--primary); display:flex; align-items:center; justify-content:center;
+    font-weight:700; font-family:'Fraunces',serif; font-size:17px;
+    border:1px solid rgba(242,153,74,0.35);
+  }
+
+  /* balance hero */
+  .hero{
+    background: linear-gradient(160deg, var(--panel-2), var(--panel));
+    border:1px solid var(--line); border-radius:22px; padding:24px 22px;
+    position:relative; overflow:hidden;
+  }
+  .hero::after{
+    content:""; position:absolute; right:-40px; top:-40px; width:150px; height:150px;
+    border-radius:50%; background:radial-gradient(circle, rgba(242,153,74,0.18), transparent 70%);
+  }
+  .hero .eyebrow{ margin-bottom:10px; }
+  .balance{ font-size:52px; font-weight:600; line-height:1; letter-spacing:-.01em; }
+  .balance small{ font-size:18px; color:var(--muted); font-weight:500; margin-left:6px; }
+  .hero-stats{ display:flex; gap:18px; margin-top:16px; }
+  .hero-stat .n{ font-size:18px; font-weight:600; }
+  .hero-stat .l{ font-size:11px; color:var(--muted); text-transform:uppercase; letter-spacing:.08em; }
+
+  /* segmented tabs */
+  .tabs{
+    display:flex; margin:20px 0 16px; background:var(--panel);
+    border:1px solid var(--line); border-radius:14px; padding:4px; gap:4px;
+  }
+  .tab{
+    flex:1; text-align:center; padding:10px 0; border-radius:10px;
+    font-size:13px; font-weight:600; color:var(--muted); cursor:pointer;
+    transition:background .15s ease, color .15s ease;
+  }
+  .tab.active{ background:var(--primary-dim); color:var(--primary); }
+
+  .panel{ display:none; }
+  .panel.active{ display:block; }
+
+  .card{
+    background:var(--panel); border:1px solid var(--line); border-radius:18px;
+    padding:20px; margin-bottom:14px;
+  }
+  .card h3{ margin:0 0 6px; font-size:16px; font-weight:600; }
+  .card p.desc{ color:var(--muted); font-size:13px; margin:0 0 14px; line-height:1.6; }
+
+  .link-box{
+    display:flex; align-items:center; gap:8px;
+    background:var(--ink); border:1px dashed var(--line); border-radius:12px;
+    padding:12px 14px; margin-bottom:12px;
+  }
+  .link-box span{
+    flex:1; font-size:12.5px; color:var(--accent); overflow:hidden;
+    text-overflow:ellipsis; white-space:nowrap;
+  }
+  .copy-btn{
+    background:var(--panel-2); border:1px solid var(--line); color:var(--paper);
+    border-radius:9px; padding:8px 12px; font-size:12px; font-weight:600; cursor:pointer;
+  }
+  .copy-btn.copied{ color:var(--accent); border-color:var(--accent); }
+
+  .stat-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .stat-box{
+    background:var(--ink); border:1px solid var(--line); border-radius:12px; padding:12px 14px;
+  }
+  .stat-box .n{ font-size:22px; font-weight:600; font-family:'Fraunces',serif; }
+  .stat-box .l{ font-size:11px; color:var(--muted); }
+
+  /* ticket-style redeem card — signature element */
+  .ticket{
+    background: linear-gradient(180deg, var(--panel-2), var(--panel));
+    border:1px solid var(--line); border-radius:18px; position:relative;
+    padding:22px 20px 20px; margin-bottom:14px;
+  }
+  .ticket::before, .ticket::after{
+    content:""; position:absolute; width:20px; height:20px; background:var(--ink);
+    border-radius:50%; top:50%; transform:translateY(-50%);
+  }
+  .ticket::before{ left:-10px; }
+  .ticket::after{ right:-10px; }
+  .ticket-tear{
+    border-top:2px dashed var(--line); margin:16px 0; position:relative;
+  }
+  .ticket-label{ font-size:12px; color:var(--muted); letter-spacing:.06em; text-transform:uppercase; margin-bottom:8px; }
+  .code-input{
+    width:100%; background:var(--ink); border:1px solid var(--line); color:var(--paper);
+    font-family:'IBM Plex Mono', monospace; font-size:16px; letter-spacing:.08em;
+    text-transform:uppercase; padding:14px; border-radius:12px; margin-bottom:12px;
+  }
+  .code-input:focus{ outline:none; border-color:var(--primary); }
+  .code-input::placeholder{ color:var(--muted); text-transform:none; letter-spacing:normal; }
+
+  .msg{ font-size:13px; padding:10px 12px; border-radius:10px; margin-top:10px; display:none; }
+  .msg.show{ display:block; }
+  .msg.ok{ background:rgba(255,200,87,0.12); color:var(--accent); }
+  .msg.err{ background:rgba(233,124,99,0.12); color:var(--danger); }
+
+  .loader{ text-align:center; padding-top:80px; color:var(--muted); font-size:14px; }
+  .spin{
+    width:26px; height:26px; margin:0 auto 14px; border-radius:50%;
+    border:2.5px solid var(--line); border-top-color:var(--primary);
+    animation:spin .8s linear infinite;
+  }
+  @keyframes spin{ to{ transform:rotate(360deg);} }
+
+  .footer-note{ text-align:center; color:var(--muted); font-size:11.5px; margin-top:22px; padding-bottom:10px; }
+</style>
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading" class="loader">
+  <div class="spin"></div>
+  লোড হচ্ছে...
+</div>
+
+<!-- JOIN GATE SCREEN -->
+<div id="gate" class="screen">
+  <div class="gate-badge">🔒</div>
+  <div class="h1">বট ব্যবহার করার আগে জয়েন করুন</div>
+  <p class="sub">নিচের চ্যানেল/গ্রুপে জয়েন করলেই ওয়ালেট, রেফারেল ও রিওয়ার্ড আনলক হয়ে যাবে।</p>
+  <div id="channelList"></div>
+  <button class="btn btn-accent btn-block" style="margin-top:20px;" onclick="verifyJoin()">✅ জয়েন করেছি — ভেরিফাই করুন</button>
+</div>
+
+<!-- MAIN APP -->
+<div id="app" class="screen">
+  <div class="top">
+    <div class="greet">
+      <div class="name" id="greetName">স্বাগতম</div>
+      <div class="tag">আপনার রিওয়ার্ড ড্যাশবোর্ড</div>
+    </div>
+    <div class="avatar" id="avatarLetter">U</div>
+  </div>
+
+  <div class="hero">
+    <div class="eyebrow">বর্তমান ব্যালেন্স</div>
+    <div class="balance display"><span id="pointsValue">0</span><small>পয়েন্ট</small></div>
+    <div class="hero-stats">
+      <div class="hero-stat">
+        <div class="n" id="referralCountValue">0</div>
+        <div class="l">রেফারেল</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-tab="refer">🔗 রেফার</div>
+    <div class="tab" data-tab="earn">🎬 Ad দেখুন</div>
+    <div class="tab" data-tab="redeem">🎁 রিডিম</div>
+  </div>
+
+  <div id="panel-refer" class="panel active">
+    <div class="card">
+      <h3>আপনার রেফারেল লিংক</h3>
+      <p class="desc">এই লিংক বন্ধুদের সাথে শেয়ার করুন — তারা জয়েন করলেই আপনি পয়েন্ট পাবেন।</p>
+      <div class="link-box">
+        <span id="referralLinkText">—</span>
+        <button class="copy-btn" id="copyBtn" onclick="copyReferralLink()">কপি</button>
+      </div>
+      <div class="stat-grid">
+        <div class="stat-box">
+          <div class="n" id="referralCountValue2">0</div>
+          <div class="l">মোট রেফার</div>
+        </div>
+        <div class="stat-box">
+          <div class="n" id="pointsValue2">0</div>
+          <div class="l">মোট পয়েন্ট</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="panel-earn" class="panel">
+    <div class="card" id="earnCard">
+      <h3>🎬 বিজ্ঞাপন দেখে পয়েন্ট নিন</h3>
+      <p class="desc">একটা ছোট বিজ্ঞাপন দেখুন, শেষ হলে স্বয়ংক্রিয়ভাবে <b><span id="adRewardAmount">5</span> পয়েন্ট</b> যোগ হয়ে যাবে। পয়েন্ট আসতে কয়েক সেকেন্ড সময় লাগতে পারে।</p>
+      <button class="btn btn-accent btn-block" id="watchAdBtn" onclick="watchAd()">▶️ বিজ্ঞাপন দেখুন</button>
+      <div id="adMsg" class="msg"></div>
+    </div>
+  </div>
+
+  <div id="panel-redeem" class="panel">
+    <div class="ticket">
+      <div class="ticket-label">🎟️ প্রোমো কোড রিডিম করুন</div>
+      <input type="text" id="codeInput" class="code-input" placeholder="যেমন: WELCOME50" maxlength="20" />
+      <div class="ticket-tear"></div>
+      <button class="btn btn-primary btn-block" onclick="redeemCode()">কোড রিডিম করুন</button>
+      <div id="redeemMsg" class="msg"></div>
+    </div>
+  </div>
+
+  <div class="footer-note">Secured by Telegram Mini Apps</div>
+</div>
+
+<script>
+  const tg = window.Telegram?.WebApp;
+  if (tg) {
+    tg.ready();
+    tg.expand();
+    try { tg.setHeaderColor("#17130F"); tg.setBackgroundColor("#17130F"); } catch (e) {}
+  }
+  const initData = tg ? tg.initData : "";
+
+  const $ = (id) => document.getElementById(id);
+
+  function show(id) {
+    ["loading", "gate", "app"].forEach(s => $(s).style.display = "none");
+    $(id).style.display = (id === "app") ? "block" : "block";
+  }
+
+  async function loadMe() {
+    try {
+      const res = await fetch("/api/me", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData }),
+      });
+      const data = await res.json();
+
+      if (!data.ok && data.need_join) {
+        renderGate(data.channels || []);
+        show("gate");
+        return;
+      }
+      if (!data.ok) {
+        $("loading").innerHTML = "⚠️ লোড করা যায়নি। বটের ভেতর থেকে আবার চেষ্টা করুন।";
+        return;
+      }
+
+      renderApp(data);
+      show("app");
+    } catch (e) {
+      $("loading").innerHTML = "⚠️ কানেকশন সমস্যা। আবার চেষ্টা করুন।";
+    }
+  }
+
+  function renderGate(channels) {
+    const list = $("channelList");
+    list.innerHTML = channels.map(ch => `
+      <div class="channel-row">
+        <div>
+          <div class="name">${ch.title}</div>
+          <div class="tag">জয়েন করা বাধ্যতামূলক</div>
+        </div>
+        <a class="btn btn-primary" href="${ch.link}" onclick="openLink(event, '${ch.link}')">জয়েন</a>
+      </div>
+    `).join("");
+  }
+
+  function openLink(e, url) {
+    if (tg) {
+      e.preventDefault();
+      tg.openTelegramLink(url);
+    }
+  }
+
+  async function verifyJoin() {
+    show("loading");
+    $("loading").innerHTML = '<div class="spin"></div>যাচাই হচ্ছে...';
+    await loadMe();
+  }
+
+  function renderApp(data) {
+    $("greetName").textContent = "স্বাগতম, " + (data.first_name || "বন্ধু");
+    $("avatarLetter").textContent = (data.first_name || "U").charAt(0).toUpperCase();
+    $("pointsValue").textContent = data.points;
+    $("pointsValue2").textContent = data.points;
+    $("referralCountValue").textContent = data.referral_count;
+    $("referralCountValue2").textContent = data.referral_count;
+    $("referralLinkText").textContent = data.referral_link;
+    window.__referralLink = data.referral_link;
+
+    if (data.ad_reward_points) $("adRewardAmount").textContent = data.ad_reward_points;
+    window.__adRewardPoints = data.ad_reward_points || 0;
+
+    if (data.monetag_zone_id) {
+      window.__monetagZone = data.monetag_zone_id;
+      loadMonetagSdk(data.monetag_sdk_src, data.monetag_zone_id);
+    } else {
+      // অ্যাডমিন এখনো Monetag zone সেট করেননি — ট্যাবে জানিয়ে দেওয়া হচ্ছে
+      $("earnCard").innerHTML =
+        '<h3>🎬 বিজ্ঞাপন দেখে পয়েন্ট নিন</h3><p class="desc">এই ফিচারটা এখনো চালু করা হয়নি।</p>';
+    }
+  }
+
+  function loadMonetagSdk(src, zone) {
+    if (window.__monetagLoaded) return;
+    window.__monetagLoaded = true;
+    const s = document.createElement("script");
+    s.src = src;
+    s.setAttribute("data-zone", zone);
+    s.setAttribute("data-sdk", "show_" + zone);
+    document.head.appendChild(s);
+  }
+
+  function watchAd() {
+    const zone = window.__monetagZone;
+    const showFn = zone ? window["show_" + zone] : null;
+    const btn = $("watchAdBtn");
+    const msgEl = $("adMsg");
+    msgEl.className = "msg";
+
+    if (typeof showFn !== "function") {
+      msgEl.textContent = "⚠️ বিজ্ঞাপন এখনো লোড হচ্ছে, একটু পর আবার চেষ্টা করুন।";
+      msgEl.classList.add("show", "err");
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = "⏳ লোড হচ্ছে...";
+    const ymid = "u_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
+
+    showFn({ ymid, requestVar: "wallet_watch_ad" })
+      .then(() => {
+        msgEl.textContent = "✅ বিজ্ঞাপন সম্পন্ন! পয়েন্ট যোগ হচ্ছে, কয়েক সেকেন্ড পর ব্যালেন্স রিফ্রেশ হবে।";
+        msgEl.classList.add("show", "ok");
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+        setTimeout(loadMe, 6000);
+      })
+      .catch(() => {
+        msgEl.textContent = "❌ বিজ্ঞাপন দেখানো যায়নি। আবার চেষ্টা করুন।";
+        msgEl.classList.add("show", "err");
+      })
+      .finally(() => {
+        btn.disabled = false;
+        btn.textContent = "▶️ বিজ্ঞাপন দেখুন";
+      });
+  }
+
+  function copyReferralLink() {
+    const link = window.__referralLink || "";
+    const btn = $("copyBtn");
+    navigator.clipboard.writeText(link).then(() => {
+      btn.textContent = "✅ কপি হয়েছে";
+      btn.classList.add("copied");
+      if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+      setTimeout(() => { btn.textContent = "কপি"; btn.classList.remove("copied"); }, 1800);
+    }).catch(() => {
+      const ta = document.createElement("textarea");
+      ta.value = link; document.body.appendChild(ta); ta.select();
+      document.execCommand("copy"); document.body.removeChild(ta);
+      btn.textContent = "✅ কপি হয়েছে";
+      setTimeout(() => { btn.textContent = "কপি"; }, 1800);
+    });
+  }
+
+  async function redeemCode() {
+    const codeEl = $("codeInput");
+    const msgEl = $("redeemMsg");
+    const code = codeEl.value.trim();
+    msgEl.className = "msg";
+    if (!code) return;
+
+    try {
+      const res = await fetch("/api/redeem", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData, code }),
+      });
+      const data = await res.json();
+
+      if (data.need_join) {
+        renderGate(data.channels || []);
+        show("gate");
+        return;
+      }
+
+      const messages = {
+        ok: "✅ সফলভাবে রিডিম হয়েছে! পয়েন্ট যোগ হয়েছে।",
+        invalid: "❌ এই কোডটি সঠিক নয়।",
+        inactive: "⛔ এই কোডটি বর্তমানে নিষ্ক্রিয়।",
+        exhausted: "⚠️ এই কোডের ব্যবহারসীমা শেষ হয়ে গেছে।",
+        already_used: "⚠️ আপনি ইতিমধ্যে এই কোডটি ব্যবহার করেছেন।",
+        disabled: "⛔ প্রোমো কোড সিস্টেম বর্তমানে বন্ধ আছে।",
+      };
+      const status = data.status || "invalid";
+      msgEl.textContent = messages[status] || "কিছু একটা সমস্যা হয়েছে।";
+      msgEl.classList.add("show", status === "ok" ? "ok" : "err");
+
+      if (status === "ok") {
+        $("pointsValue").textContent = data.points;
+        $("pointsValue2").textContent = data.points;
+        codeEl.value = "";
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+      }
+    } catch (e) {
+      msgEl.textContent = "⚠️ কানেকশন সমস্যা, আবার চেষ্টা করুন।";
+      msgEl.classList.add("show", "err");
+    }
+  }
+
+  document.querySelectorAll(".tab").forEach(tab => {
+    tab.addEventListener("click", () => {
+      document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+      document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+      tab.classList.add("active");
+      $("panel-" + tab.dataset.tab).classList.add("active");
+    });
+  });
+
+  loadMe();
+</script>
+</body>
+</html>
