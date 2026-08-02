@@ -64,6 +64,9 @@ from db import (
     user_stats,
     create_promo,
     redeem_promo,
+    get_withdrawal,
+    approve_withdrawal,
+    reject_withdrawal,
 )
 
 logging.basicConfig(
@@ -165,7 +168,8 @@ def welcome_text(user) -> str:
         "🔗 /myref — আপনার রেফারেল লিংক পান, বন্ধুদের ইনভাইট করে পয়েন্ট জিতুন\n"
         "🎁 /redeem &lt;code&gt; — প্রোমো কোড রিডিম করুন\n"
         "💰 /balance — আপনার পয়েন্ট ব্যালেন্স দেখুন\n"
-        "🚀 /app — সুন্দর Mini App খুলুন\n"
+        "🚀 /app — সুন্দর Mini App খুলুন (ওয়ালেট, Ad দেখা, রিডিম, উত্তোলন সব একসাথে)\n"
+        "💸 Mini App থেকে পয়েন্ট bKash/Nagad/Rocket-এ Withdraw করতে পারবেন\n"
         "❓ /help — সাহায্য"
     )
     text += ads_footer()
@@ -384,6 +388,46 @@ async def verify_join_callback(update: Update, context: ContextTypes.DEFAULT_TYP
     )
 
 
+async def withdraw_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    query = update.callback_query
+    if not is_admin(query.from_user.id):
+        await query.answer("⛔ আপনি অ্যাডমিন নন।", show_alert=True)
+        return
+
+    action, wid_str = query.data.replace("wd_", "").rsplit("_", 1)
+    wid = int(wid_str)
+    w = get_withdrawal(wid)
+    if not w:
+        await query.answer("এই রিকোয়েস্ট খুঁজে পাওয়া যায়নি।", show_alert=True)
+        return
+    if w["status"] != "pending":
+        await query.answer(f"এই রিকোয়েস্ট আগেই '{w['status']}' করা হয়ে গেছে।", show_alert=True)
+        return
+
+    if action == "approve":
+        approve_withdrawal(wid)
+        await query.answer("✅ Approved!")
+        await query.edit_message_text(query.message.text + "\n\n✅ APPROVED — টাকা পাঠিয়ে দিন।")
+        try:
+            await context.bot.send_message(
+                chat_id=w["user_id"],
+                text=f"✅ আপনার Withdraw রিকোয়েস্ট #{wid} ({w['points']} পয়েন্ট = {w['taka']} টাকা) অ্যাপ্রুভ হয়েছে! শীঘ্রই {w['method']} ({w['account_number']}) নাম্বারে টাকা পাঠানো হবে।",
+            )
+        except Exception:
+            pass
+    else:
+        reject_withdrawal(wid)
+        await query.answer("❌ Rejected, পয়েন্ট ফেরত দেওয়া হয়েছে।")
+        await query.edit_message_text(query.message.text + "\n\n❌ REJECTED — পয়েন্ট ইউজারকে ফেরত দেওয়া হয়েছে।")
+        try:
+            await context.bot.send_message(
+                chat_id=w["user_id"],
+                text=f"❌ দুঃখিত, আপনার Withdraw রিকোয়েস্ট #{wid} বাতিল করা হয়েছে। {w['points']} পয়েন্ট আপনার ব্যালেন্সে ফেরত দেওয়া হয়েছে।",
+            )
+        except Exception:
+            pass
+
+
 async def addpromo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(update.effective_user.id):
         await update.message.reply_text("⛔ এই কমান্ড শুধুমাত্র অ্যাডমিনদের জন্য।")
@@ -477,6 +521,7 @@ def main():
     app.add_handler(CommandHandler("stats", stats_cmd))
 
     app.add_handler(CallbackQueryHandler(verify_join_callback, pattern="^verify_join$"))
+    app.add_handler(CallbackQueryHandler(withdraw_callback, pattern="^wd_(approve|reject)_"))
     app.add_handler(CallbackQueryHandler(admin_callback, pattern="^(toggle_|show_stats)"))
 
     logger.info("Bot starting...")
