@@ -300,7 +300,8 @@
         return;
       }
       if (!data.ok) {
-        $("loading").innerHTML = "⚠️ লোড করা যায়নি। বটের ভেতর থেকে আবার চেষ্টা করুন।";
+        const reason = data.reason ? " (কারণ: " + data.reason + ")" : "";
+        $("loading").innerHTML = "⚠️ লোড করা যায়নি" + reason + "। বটের ভেতর থেকে আবার চেষ্টা করুন।";
         return;
       }
 
