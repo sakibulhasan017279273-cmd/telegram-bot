@@ -62,26 +62,34 @@ if CHANNEL_2_ID:
 # ---------------------------------------------------------------------------
 
 def validate_init_data(init_data: str):
-    """initData সঠিক ও Telegram থেকে এসেছে কিনা যাচাই করে। বৈধ হলে user dict রিটার্ন করে, নাহলে None।"""
+    """initData সঠিক ও Telegram থেকে এসেছে কিনা যাচাই করে।
+    সফল হলে (user_dict, None) রিটার্ন করে, ব্যর্থ হলে (None, reason_code) রিটার্ন করে —
+    reason_code দিয়ে বোঝা যায় ঠিক কোথায় সমস্যা হলো (ডিবাগ করার জন্য দরকারি)।"""
+    if not init_data:
+        return None, "empty_init_data"
     try:
         parsed = dict(parse_qsl(init_data, strict_parsing=True))
         received_hash = parsed.pop("hash", None)
         if not received_hash:
-            return None
+            return None, "no_hash_field"
 
+        # Telegram এর অফিসিয়াল নিয়ম: শুধু 'hash' ফিল্ড বাদ দিয়ে বাকি সব ফিল্ড দিয়ে
+        # data-check-string বানাতে হয় (signature সহ, যদি থাকে)
         data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(parsed.items()))
         secret_key = hmac.new(b"WebAppData", BOT_TOKEN.encode(), hashlib.sha256).digest()
         computed_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
         if not hmac.compare_digest(computed_hash, received_hash):
-            return None
+            print(f"[monetag-auth-debug] hash mismatch. keys received: {list(parsed.keys())}")
+            return None, "hash_mismatch"
 
         user_json = parsed.get("user")
         if not user_json:
-            return None
-        return json.loads(user_json)
-    except Exception:
-        return None
+            return None, "no_user_field"
+        return json.loads(user_json), None
+    except Exception as e:
+        print(f"[monetag-auth-debug] exception while validating initData: {e}")
+        return None, "exception"
 
 
 def get_unjoined_channels(user_id: int):
@@ -120,9 +128,10 @@ def health():
 @app.route("/api/me", methods=["POST"])
 def api_me():
     body = request.get_json(silent=True) or {}
-    tg_user = validate_init_data(body.get("initData", ""))
+    tg_user, reason = validate_init_data(body.get("initData", ""))
     if not tg_user:
-        return jsonify({"ok": False, "error": "invalid_init_data"}), 401
+        print(f"[api/me] validation failed, reason={reason}")
+        return jsonify({"ok": False, "error": "invalid_init_data", "reason": reason}), 401
 
     user_id = tg_user["id"]
     get_or_create_user(user_id, tg_user.get("username") or tg_user.get("first_name", "user"))
@@ -152,9 +161,10 @@ def api_me():
 @app.route("/api/redeem", methods=["POST"])
 def api_redeem():
     body = request.get_json(silent=True) or {}
-    tg_user = validate_init_data(body.get("initData", ""))
+    tg_user, reason = validate_init_data(body.get("initData", ""))
     if not tg_user:
-        return jsonify({"ok": False, "error": "invalid_init_data"}), 401
+        print(f"[api/redeem] validation failed, reason={reason}")
+        return jsonify({"ok": False, "error": "invalid_init_data", "reason": reason}), 401
 
     user_id = tg_user["id"]
     missing = get_unjoined_channels(user_id)
