@@ -21,6 +21,7 @@ from flask import Flask, jsonify, request, send_from_directory
 from config import (
     BOT_TOKEN,
     BOT_USERNAME,
+    ADMIN_IDS,
     CHANNEL_1_TITLE,
     CHANNEL_1_LINK,
     CHANNEL_1_USERNAME,
@@ -31,6 +32,9 @@ from config import (
     MONETAG_SDK_SRC,
     AD_REWARD_POINTS,
     MONETAG_POSTBACK_SECRET,
+    WITHDRAW_METHODS,
+    POINTS_TO_TAKA_RATE,
+    MIN_WITHDRAW_POINTS,
 )
 from db import (
     init_db,
@@ -39,6 +43,7 @@ from db import (
     get_user,
     redeem_promo,
     record_ad_reward,
+    create_withdrawal_request,
 )
 
 app = Flask(__name__, static_folder="static", static_url_path="")
@@ -160,6 +165,9 @@ def api_me():
             "monetag_zone_id": MONETAG_ZONE_ID,
             "monetag_sdk_src": MONETAG_SDK_SRC,
             "ad_reward_points": AD_REWARD_POINTS,
+            "withdraw_methods": WITHDRAW_METHODS,
+            "points_to_taka_rate": POINTS_TO_TAKA_RATE,
+            "min_withdraw_points": MIN_WITHDRAW_POINTS,
         }
     )
 
@@ -221,6 +229,67 @@ def monetag_postback():
     get_or_create_user(user_id, "ad_viewer")
     credited = record_ad_reward(ymid, user_id, AD_REWARD_POINTS)
     return ("ok (credited)" if credited else "ok (duplicate, skipped)"), 200
+
+
+@app.route("/api/withdraw", methods=["POST"])
+def api_withdraw():
+    body = request.get_json(silent=True) or {}
+    tg_user, reason = validate_init_data(body.get("initData", ""))
+    if not tg_user:
+        return jsonify({"ok": False, "error": "invalid_init_data", "reason": reason}), 401
+
+    user_id = tg_user["id"]
+    missing = get_unjoined_channels(user_id)
+    if missing:
+        return jsonify({"ok": False, "need_join": True, "channels": missing})
+
+    method = (body.get("method") or "").strip()
+    account_number = (body.get("account_number") or "").strip()
+    try:
+        points = int(body.get("points", 0))
+    except (TypeError, ValueError):
+        return jsonify({"ok": False, "status": "invalid_amount"})
+
+    if method not in WITHDRAW_METHODS:
+        return jsonify({"ok": False, "status": "invalid_method"})
+    if not account_number or len(account_number) < 6:
+        return jsonify({"ok": False, "status": "invalid_account"})
+    if points < MIN_WITHDRAW_POINTS:
+        return jsonify({"ok": False, "status": "below_minimum"})
+
+    get_or_create_user(user_id, tg_user.get("username") or tg_user.get("first_name", "user"))
+    taka = round(points / POINTS_TO_TAKA_RATE, 2)
+    wid = create_withdrawal_request(user_id, points, taka, method, account_number)
+    if wid is None:
+        return jsonify({"ok": False, "status": "insufficient_balance"})
+
+    # অ্যাডমিনদের কাছে Approve/Reject বাটনসহ নোটিফিকেশন পাঠানো হচ্ছে
+    display_name = tg_user.get("first_name", "") or tg_user.get("username", "user")
+    admin_text = (
+        f"💸 নতুন Withdraw রিকোয়েস্ট #{wid}\n\n"
+        f"ইউজার: {display_name} (ID: {user_id})\n"
+        f"পরিমাণ: {points} পয়েন্ট = {taka} টাকা\n"
+        f"মেথড: {method}\n"
+        f"নাম্বার: {account_number}"
+    )
+    admin_keyboard = {
+        "inline_keyboard": [[
+            {"text": "✅ Approve", "callback_data": f"wd_approve_{wid}"},
+            {"text": "❌ Reject", "callback_data": f"wd_reject_{wid}"},
+        ]]
+    }
+    for admin_id in ADMIN_IDS:
+        try:
+            requests.post(
+                f"{TELEGRAM_API}/sendMessage",
+                json={"chat_id": admin_id, "text": admin_text, "reply_markup": admin_keyboard},
+                timeout=10,
+            )
+        except Exception as e:
+            print(f"[withdraw] অ্যাডমিন {admin_id} কে নোটিফাই করা যায়নি: {e}")
+
+    u = get_user(user_id)
+    return jsonify({"ok": True, "status": "submitted", "withdrawal_id": wid, "points": u["points"]})
 
 
 def run():
