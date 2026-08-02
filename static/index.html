@@ -300,8 +300,13 @@
         return;
       }
       if (!data.ok) {
-        const reason = data.reason ? " (কারণ: " + data.reason + ")" : "";
-        $("loading").innerHTML = "⚠️ লোড করা যায়নি" + reason + "। বটের ভেতর থেকে আবার চেষ্টা করুন।";
+        if (data.reason === "empty_init_data") {
+          $("loading").innerHTML =
+            "⚠️ এই বাটন দিয়ে অ্যাপ খোলা যাচ্ছে না।<br>দয়া করে বটের চ্যাটে গিয়ে <b>/app</b> লিখুন, অথবা মেসেজ ইনপুট বক্সের পাশের মেনু আইকন থেকে অ্যাপ খুলুন।";
+        } else {
+          const reason = data.reason ? " (কারণ: " + data.reason + ")" : "";
+          $("loading").innerHTML = "⚠️ লোড করা যায়নি" + reason + "। বটের ভেতর থেকে আবার চেষ্টা করুন।";
+        }
         return;
       }
 
