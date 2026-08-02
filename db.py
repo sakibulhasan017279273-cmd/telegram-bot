@@ -60,6 +60,19 @@ def init_db():
             credited_at TEXT
         )
     """)
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS withdrawals (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            points INTEGER,
+            taka REAL,
+            method TEXT,
+            account_number TEXT,
+            status TEXT DEFAULT 'pending',
+            created_at TEXT,
+            updated_at TEXT
+        )
+    """)
     defaults = {"referral_enabled": "1", "promo_enabled": "1", "ads_enabled": "1", "force_join_enabled": "1"}
     for k, v in defaults.items():
         c.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (k, v))
@@ -167,6 +180,67 @@ def record_ad_reward(ymid: str, user_id: int, points: int) -> bool:
         (ymid, user_id, points, datetime.utcnow().isoformat()),
     )
     conn.execute("UPDATE users SET points = points + ? WHERE user_id=?", (points, user_id))
+    conn.commit()
+    conn.close()
+    return True
+
+
+def create_withdrawal_request(user_id: int, points: int, taka: float, method: str, account_number: str):
+    """নতুন withdraw রিকোয়েস্ট তৈরি করে এবং সাথে সাথে ইউজারের ব্যালেন্স থেকে পয়েন্ট কেটে রাখে (escrow) —
+    যাতে একই পয়েন্ট দিয়ে দুইবার withdraw রিকোয়েস্ট করা না যায়। Reject হলে পয়েন্ট ফেরত যাবে।
+    রিটার্ন করে নতুন withdrawal id, অথবা None যদি পর্যাপ্ত ব্যালেন্স না থাকে।"""
+    conn = get_conn()
+    user = conn.execute("SELECT points FROM users WHERE user_id=?", (user_id,)).fetchone()
+    if not user or user["points"] < points:
+        conn.close()
+        return None
+    conn.execute("UPDATE users SET points = points - ? WHERE user_id=?", (points, user_id))
+    cur = conn.execute(
+        "INSERT INTO withdrawals (user_id, points, taka, method, account_number, status, created_at, updated_at) "
+        "VALUES (?, ?, ?, ?, ?, 'pending', ?, ?)",
+        (user_id, points, taka, method, account_number, datetime.utcnow().isoformat(), datetime.utcnow().isoformat()),
+    )
+    wid = cur.lastrowid
+    conn.commit()
+    conn.close()
+    return wid
+
+
+def get_withdrawal(wid: int):
+    conn = get_conn()
+    row = conn.execute("SELECT * FROM withdrawals WHERE id=?", (wid,)).fetchone()
+    conn.close()
+    return row
+
+
+def approve_withdrawal(wid: int) -> bool:
+    """পয়েন্ট আগেই কেটে রাখা হয়েছিল (escrow), তাই এখানে শুধু status বদলানো হয়।"""
+    conn = get_conn()
+    w = conn.execute("SELECT status FROM withdrawals WHERE id=?", (wid,)).fetchone()
+    if not w or w["status"] != "pending":
+        conn.close()
+        return False
+    conn.execute(
+        "UPDATE withdrawals SET status='paid', updated_at=? WHERE id=?",
+        (datetime.utcnow().isoformat(), wid),
+    )
+    conn.commit()
+    conn.close()
+    return True
+
+
+def reject_withdrawal(wid: int) -> bool:
+    """রিকোয়েস্ট বাতিল করে এবং escrow করা পয়েন্ট ইউজারকে ফেরত দেয়।"""
+    conn = get_conn()
+    w = conn.execute("SELECT * FROM withdrawals WHERE id=?", (wid,)).fetchone()
+    if not w or w["status"] != "pending":
+        conn.close()
+        return False
+    conn.execute("UPDATE users SET points = points + ? WHERE user_id=?", (w["points"], w["user_id"]))
+    conn.execute(
+        "UPDATE withdrawals SET status='rejected', updated_at=? WHERE id=?",
+        (datetime.utcnow().isoformat(), wid),
+    )
     conn.commit()
     conn.close()
     return True
