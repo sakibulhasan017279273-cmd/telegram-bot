@@ -60,3 +60,15 @@ AD_REWARD_POINTS = int(os.environ.get("AD_REWARD_POINTS", "5"))
 # Postback URL সুরক্ষিত রাখতে একটা গোপন কোড — Monetag Postback URL এ এই secret বসাবেন
 # (নিচে README এ উদাহরণ আছে)। নিজে একটা র‍্যান্ডম স্ট্রিং বসিয়ে নিন।
 MONETAG_POSTBACK_SECRET = os.environ.get("MONETAG_POSTBACK_SECRET", "change-this-secret")
+
+# ---------------------------------------------------------------------------
+# 9) Withdraw (টাকা তোলার) সিস্টেম
+# ---------------------------------------------------------------------------
+# কোন কোন পেমেন্ট মেথড দেখাবে (কমা দিয়ে আলাদা)
+WITHDRAW_METHODS = [m.strip() for m in os.environ.get("WITHDRAW_METHODS", "bKash,Nagad,Rocket").split(",") if m.strip()]
+
+# পয়েন্ট থেকে টাকায় কনভার্সন রেট — যেমন 10 মানে "১০ পয়েন্ট = ১ টাকা"
+POINTS_TO_TAKA_RATE = int(os.environ.get("POINTS_TO_TAKA_RATE", "10"))
+
+# একবারে সর্বনিম্ন কত পয়েন্ট withdraw করা যাবে
+MIN_WITHDRAW_POINTS = int(os.environ.get("MIN_WITHDRAW_POINTS", "100"))
