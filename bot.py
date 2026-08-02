@@ -27,8 +27,6 @@ from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     WebAppInfo,
-    ReplyKeyboardMarkup,
-    KeyboardButton,
 )
 from telegram.constants import ParseMode
 from telegram.ext import (
@@ -174,12 +172,11 @@ def welcome_text(user) -> str:
     return text
 
 
-def persistent_app_keyboard() -> ReplyKeyboardMarkup:
-    """চ্যাটের নিচে সবসময় স্থায়ীভাবে থাকা 'Open App' বাটন — একবার পাঠালে এটা লেগেই থাকবে।"""
-    return ReplyKeyboardMarkup(
-        [[KeyboardButton("🚀 Open App", web_app=WebAppInfo(url=MINI_APP_URL))]],
-        resize_keyboard=True,
-        is_persistent=True,
+def open_app_markup() -> InlineKeyboardMarkup:
+    """ইনলাইন বাটন — এটা দিয়ে Mini App খুললে initData ঠিকভাবে পাঠানো হয় (নিরাপদ লগইন)।
+    Reply Keyboard বাটন এই কাজে ব্যবহার করা যায় না — Telegram সেক্ষেত্রে initData খালি পাঠায়।"""
+    return InlineKeyboardMarkup(
+        [[InlineKeyboardButton("🚀 Mini App খুলুন", web_app=WebAppInfo(url=MINI_APP_URL))]]
     )
 
 
@@ -220,7 +217,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     await update.message.reply_text(
-        welcome_text(user), parse_mode=ParseMode.HTML, reply_markup=persistent_app_keyboard()
+        welcome_text(user), parse_mode=ParseMode.HTML, reply_markup=open_app_markup()
     )
 
 
@@ -250,8 +247,8 @@ async def app_cmd(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not await ensure_joined(update, context):
         return
     await update.message.reply_text(
-        "🚀 নিচের বাটনে চাপুন Mini App খুলতে (বাটনটা সবসময় নিচে থাকবে):",
-        reply_markup=persistent_app_keyboard(),
+        "🚀 নিচের বাটনে চাপুন Mini App খুলতে:",
+        reply_markup=open_app_markup(),
     )
 
 
@@ -383,7 +380,7 @@ async def verify_join_callback(update: Update, context: ContextTypes.DEFAULT_TYP
         chat_id=user.id,
         text=welcome_text(user),
         parse_mode=ParseMode.HTML,
-        reply_markup=persistent_app_keyboard(),
+        reply_markup=open_app_markup(),
     )
 
 
