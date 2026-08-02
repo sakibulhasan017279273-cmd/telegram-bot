@@ -103,10 +103,16 @@ def get_unjoined_channels(user_id: int):
                 params={"chat_id": ch["chat_ref"], "user_id": user_id},
                 timeout=10,
             ).json()
+            if not resp.get("ok"):
+                # বট হয়তো এই চ্যানেলে Admin না, বা চ্যাট খুঁজে পায়নি —
+                # এক্ষেত্রে ইউজারকে আটকানো হবে না, শুধু লগে জানিয়ে রাখা হচ্ছে
+                print(f"[force-join] '{ch['title']}' চেক করা যায়নি: {resp.get('description')}")
+                continue
             status = resp.get("result", {}).get("status")
-            if status in ("left", "kicked") or not resp.get("ok"):
+            if status in ("left", "kicked"):
                 missing.append({"title": ch["title"], "link": ch["link"]})
-        except Exception:
+        except Exception as e:
+            print(f"[force-join] '{ch['title']}' চেক করার সময় এরর: {e}")
             continue
     return missing
 
