@@ -101,12 +101,12 @@
   /* segmented tabs */
   .tabs{
     display:flex; margin:20px 0 16px; background:var(--panel);
-    border:1px solid var(--line); border-radius:14px; padding:4px; gap:4px;
+    border:1px solid var(--line); border-radius:14px; padding:4px; gap:3px;
   }
   .tab{
-    flex:1; text-align:center; padding:10px 0; border-radius:10px;
-    font-size:13px; font-weight:600; color:var(--muted); cursor:pointer;
-    transition:background .15s ease, color .15s ease;
+    flex:1; text-align:center; padding:10px 2px; border-radius:10px;
+    font-size:11.5px; font-weight:600; color:var(--muted); cursor:pointer;
+    transition:background .15s ease, color .15s ease; white-space:nowrap;
   }
   .tab.active{ background:var(--primary-dim); color:var(--primary); }
 
@@ -166,6 +166,25 @@
   .code-input:focus{ outline:none; border-color:var(--primary); }
   .code-input::placeholder{ color:var(--muted); text-transform:none; letter-spacing:normal; }
 
+  .field-label{ font-size:12px; color:var(--muted); margin:0 0 6px; font-weight:600; }
+  .select-input{
+    width:100%; background:var(--ink); border:1px solid var(--line); color:var(--paper);
+    font-family:inherit; font-size:15px; padding:13px 14px; border-radius:12px; margin-bottom:14px;
+    appearance:none; -webkit-appearance:none;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%238A7A6C'%3E%3Cpath d='M5.23 7.21a.75.75 0 011.06.02L10 11.168l3.71-3.938a.75.75 0 111.08 1.04l-4.24 4.5a.75.75 0 01-1.08 0l-4.24-4.5a.75.75 0 01.02-1.06z'/%3E%3C/svg%3E");
+    background-repeat:no-repeat; background-position:right 14px center; background-size:18px;
+  }
+  .plain-input{
+    width:100%; background:var(--ink); border:1px solid var(--line); color:var(--paper);
+    font-family:inherit; font-size:15px; padding:13px 14px; border-radius:12px; margin-bottom:14px;
+  }
+  .plain-input:focus, .select-input:focus{ outline:none; border-color:var(--primary); }
+  .plain-input::placeholder{ color:var(--muted); }
+  .info-box{
+    background:var(--primary-dim); border:1px solid rgba(242,153,74,0.3); border-radius:12px;
+    padding:12px 14px; font-size:12.5px; color:var(--primary); margin-bottom:14px; line-height:1.6;
+  }
+
   .msg{ font-size:13px; padding:10px 12px; border-radius:10px; margin-top:10px; display:none; }
   .msg.show{ display:block; }
   .msg.ok{ background:rgba(255,200,87,0.12); color:var(--accent); }
@@ -222,8 +241,9 @@
 
   <div class="tabs">
     <div class="tab active" data-tab="refer">🔗 রেফার</div>
-    <div class="tab" data-tab="earn">🎬 Ad দেখুন</div>
+    <div class="tab" data-tab="earn">🎬 Ad</div>
     <div class="tab" data-tab="redeem">🎁 রিডিম</div>
+    <div class="tab" data-tab="withdraw">💸 উত্তোলন</div>
   </div>
 
   <div id="panel-refer" class="panel active">
@@ -263,6 +283,28 @@
       <div class="ticket-tear"></div>
       <button class="btn btn-primary btn-block" onclick="redeemCode()">কোড রিডিম করুন</button>
       <div id="redeemMsg" class="msg"></div>
+    </div>
+  </div>
+
+  <div id="panel-withdraw" class="panel">
+    <div class="card">
+      <h3>💸 পয়েন্ট থেকে টাকা তুলুন</h3>
+      <div id="withdrawInfoBox" class="info-box">সর্বনিম্ন <b><span id="wdMinPoints">100</span> পয়েন্ট</b> = <span id="wdMinTaka">10</span> টাকা থেকে উত্তোলন করা যাবে।</div>
+
+      <div class="field-label">পেমেন্ট মেথড</div>
+      <select id="wdMethod" class="select-input">
+        <option value="">মেথড সিলেক্ট করুন</option>
+      </select>
+
+      <div class="field-label">অ্যাকাউন্ট নাম্বার</div>
+      <input type="text" id="wdAccount" class="plain-input" placeholder="যেমন: 01712345678" maxlength="20" />
+
+      <div class="field-label">কত পয়েন্ট উত্তোলন করবেন</div>
+      <input type="number" id="wdPoints" class="plain-input" placeholder="যেমন: 200" min="0" />
+      <div class="field-label" style="margin-top:-8px; margin-bottom:14px;" id="wdTakaPreview">≈ 0 টাকা পাবেন</div>
+
+      <button class="btn btn-primary btn-block" onclick="submitWithdraw()">উত্তোলনের অনুরোধ পাঠান</button>
+      <div id="wdMsg" class="msg"></div>
     </div>
   </div>
 
@@ -355,6 +397,22 @@
 
     if (data.ad_reward_points) $("adRewardAmount").textContent = data.ad_reward_points;
     window.__adRewardPoints = data.ad_reward_points || 0;
+
+    // Withdraw ট্যাব সেটআপ
+    window.__pointsToTakaRate = data.points_to_taka_rate || 10;
+    window.__minWithdrawPoints = data.min_withdraw_points || 100;
+    $("wdMinPoints").textContent = window.__minWithdrawPoints;
+    $("wdMinTaka").textContent = (window.__minWithdrawPoints / window.__pointsToTakaRate).toFixed(2).replace(/\.00$/, "");
+
+    const methodSelect = $("wdMethod");
+    if (methodSelect.options.length <= 1 && Array.isArray(data.withdraw_methods)) {
+      data.withdraw_methods.forEach((m) => {
+        const opt = document.createElement("option");
+        opt.value = m;
+        opt.textContent = m;
+        methodSelect.appendChild(opt);
+      });
+    }
 
     if (data.monetag_zone_id) {
       window.__monetagZone = data.monetag_zone_id;
@@ -464,6 +522,63 @@
         $("pointsValue").textContent = data.points;
         $("pointsValue2").textContent = data.points;
         codeEl.value = "";
+        if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
+      }
+    } catch (e) {
+      msgEl.textContent = "⚠️ কানেকশন সমস্যা, আবার চেষ্টা করুন।";
+      msgEl.classList.add("show", "err");
+    }
+  }
+
+  $("wdPoints").addEventListener("input", () => {
+    const pts = parseInt($("wdPoints").value, 10) || 0;
+    const rate = window.__pointsToTakaRate || 10;
+    $("wdTakaPreview").textContent = "≈ " + (pts / rate).toFixed(2).replace(/\.00$/, "") + " টাকা পাবেন";
+  });
+
+  async function submitWithdraw() {
+    const method = $("wdMethod").value;
+    const account = $("wdAccount").value.trim();
+    const points = parseInt($("wdPoints").value, 10) || 0;
+    const msgEl = $("wdMsg");
+    msgEl.className = "msg";
+
+    if (!method) { msgEl.textContent = "⚠️ পেমেন্ট মেথড সিলেক্ট করুন।"; msgEl.classList.add("show", "err"); return; }
+    if (!account || account.length < 6) { msgEl.textContent = "⚠️ সঠিক অ্যাকাউন্ট নাম্বার দিন।"; msgEl.classList.add("show", "err"); return; }
+    if (points < (window.__minWithdrawPoints || 100)) {
+      msgEl.textContent = `⚠️ সর্বনিম্ন ${window.__minWithdrawPoints} পয়েন্ট থেকে উত্তোলন করা যাবে।`;
+      msgEl.classList.add("show", "err");
+      return;
+    }
+
+    try {
+      const res = await fetch("/api/withdraw", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ initData, method, account_number: account, points }),
+      });
+      const data = await res.json();
+
+      if (data.need_join) { renderGate(data.channels || []); show("gate"); return; }
+
+      const messages = {
+        submitted: "✅ আপনার উত্তোলনের অনুরোধ জমা হয়েছে! অ্যাডমিন অনুমোদন করলে পেমেন্ট পাঠানো হবে।",
+        invalid_method: "❌ সঠিক পেমেন্ট মেথড সিলেক্ট করুন।",
+        invalid_account: "❌ সঠিক অ্যাকাউন্ট নাম্বার দিন।",
+        below_minimum: `⚠️ সর্বনিম্ন ${window.__minWithdrawPoints} পয়েন্ট থেকে উত্তোলন করা যাবে।`,
+        insufficient_balance: "❌ পর্যাপ্ত পয়েন্ট নেই।",
+        invalid_amount: "❌ সঠিক পরিমাণ দিন।",
+      };
+      const status = data.status || "invalid_amount";
+      msgEl.textContent = messages[status] || "কিছু একটা সমস্যা হয়েছে।";
+      msgEl.classList.add("show", status === "submitted" ? "ok" : "err");
+
+      if (status === "submitted") {
+        $("pointsValue").textContent = data.points;
+        $("pointsValue2").textContent = data.points;
+        $("wdAccount").value = "";
+        $("wdPoints").value = "";
+        $("wdTakaPreview").textContent = "≈ 0 টাকা পাবেন";
         if (tg?.HapticFeedback) tg.HapticFeedback.notificationOccurred("success");
       }
     } catch (e) {
