@@ -20,6 +20,7 @@ Run: python bot.py
 import logging
 import random
 import string
+import html
 
 from telegram import (
     Update,
@@ -164,7 +165,7 @@ def welcome_text(user) -> str:
         f"স্বাগতম, {user.first_name}! 👋\n\n"
         "এই বট দিয়ে আপনি পারবেন:\n"
         "🔗 /myref — আপনার রেফারেল লিংক পান, বন্ধুদের ইনভাইট করে পয়েন্ট জিতুন\n"
-        "🎁 /redeem <code> — প্রোমো কোড রিডিম করুন\n"
+        "🎁 /redeem &lt;code&gt; — প্রোমো কোড রিডিম করুন\n"
         "💰 /balance — আপনার পয়েন্ট ব্যালেন্স দেখুন\n"
         "🚀 /app — সুন্দর Mini App খুলুন\n"
         "❓ /help — সাহায্য"
@@ -413,7 +414,7 @@ async def addpromo(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     create_promo(code, reward, max_uses)
     await update.message.reply_text(
-        f"✅ প্রোমো কোড তৈরি হয়েছে!\n\nকোড: <code>{code}</code>\nরিওয়ার্ড: {reward} পয়েন্ট\nসর্বোচ্চ ব্যবহার: {max_uses} জন",
+        f"✅ প্রোমো কোড তৈরি হয়েছে!\n\nকোড: <code>{html.escape(code)}</code>\nরিওয়ার্ড: {reward} পয়েন্ট\nসর্বোচ্চ ব্যবহার: {max_uses} জন",
         parse_mode=ParseMode.HTML,
     )
 
